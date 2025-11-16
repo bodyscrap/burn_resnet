@@ -9,42 +9,9 @@ use burn::{
 };
 
 #[derive(Module, Debug)]
-pub struct BasicBlock<B: Backend> {
-    conv1: Conv2d<B>,
-    bn1: BatchNorm<B, 2>,
-    conv2: Conv2d<B>,
-    bn2: BatchNorm<B, 2>,
-    downsample: Option<DownsampleBlock<B>>,
-    relu: Relu,
-}
-
-#[derive(Module, Debug)]
-pub struct DownsampleBlock<B: Backend> {
+struct DownsampleBlock<B: Backend> {
     conv: Conv2d<B>,
     bn: BatchNorm<B, 2>,
-}
-
-impl<B: Backend> BasicBlock<B> {
-    pub fn forward(&self, x: Tensor<B, 4>) -> Tensor<B, 4> {
-        let identity = x.clone();
-
-        let out = self.conv1.forward(x);
-        let out = self.bn1.forward(out);
-        let out = self.relu.forward(out);
-
-        let out = self.conv2.forward(out);
-        let out = self.bn2.forward(out);
-
-        let out = if let Some(ref downsample) = self.downsample {
-            let identity = downsample.conv.forward(identity);
-            let identity = downsample.bn.forward(identity);
-            out + identity
-        } else {
-            out + identity
-        };
-
-        self.relu.forward(out)
-    }
 }
 
 #[derive(Module, Debug)]
@@ -229,33 +196,9 @@ impl<B: Backend> ResNet<B> {
     }
     
     /// 最終層（分類ヘッド）を新しいクラス数用に置き換える
+    #[allow(dead_code)]
     pub fn replace_head(mut self, num_classes: usize, device: &B::Device) -> Self {
         self.fc = LinearConfig::new(2048, num_classes).init(device);
         self
-    }
-    
-    /// 特徴抽出部分のみを返す（FC層以外）
-    pub fn forward_features(&self, x: Tensor<B, 4>) -> Tensor<B, 2> {
-        let mut x = self.conv1.forward(x);
-        x = self.bn1.forward(x);
-        x = self.relu.forward(x);
-        x = self.maxpool.forward(x);
-
-        for block in &self.layer1 {
-            x = block.forward(x);
-        }
-        for block in &self.layer2 {
-            x = block.forward(x);
-        }
-        for block in &self.layer3 {
-            x = block.forward(x);
-        }
-        for block in &self.layer4 {
-            x = block.forward(x);
-        }
-
-        x = self.avgpool.forward(x);
-        let [batch_size, channels, _, _] = x.dims();
-        x.reshape([batch_size, channels])
     }
 }

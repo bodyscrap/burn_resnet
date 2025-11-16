@@ -58,14 +58,14 @@ impl Batcher {
 
     fn batch(&self, items: Vec<ImageItem>) -> (Tensor<MyAutodiffBackend, 4>, Tensor<MyAutodiffBackend, 1, Int>) {
         let batch_size = items.len();
-        let image_size = (items[0].image.len() as f32 / 3.0).sqrt() as usize;
+        let image_size = 224;
         
-        let mut images_data = Vec::new();
-        let mut labels_data = Vec::new();
+        let mut images_data = Vec::with_capacity(batch_size * 3 * image_size * image_size);
+        let mut labels_data = Vec::with_capacity(batch_size);
         
         for item in items {
             images_data.extend(item.image);
-            labels_data.push(item.label as i64);
+            labels_data.push(item.label as i32);
         }
         
         let images = Tensor::<MyAutodiffBackend, 4>::from_data(
@@ -74,31 +74,6 @@ impl Batcher {
         );
         
         let labels = Tensor::<MyAutodiffBackend, 1, Int>::from_data(
-            TensorData::new(labels_data, [batch_size]),
-            &self.device,
-        );
-        
-        (images, labels)
-    }
-    
-    fn batch_valid(&self, items: Vec<ImageItem>) -> (Tensor<MyBackend, 4>, Tensor<MyBackend, 1, Int>) {
-        let batch_size = items.len();
-        let image_size = (items[0].image.len() as f32 / 3.0).sqrt() as usize;
-        
-        let mut images_data = Vec::new();
-        let mut labels_data = Vec::new();
-        
-        for item in items {
-            images_data.extend(item.image);
-            labels_data.push(item.label as i64);
-        }
-        
-        let images = Tensor::<MyBackend, 4>::from_data(
-            TensorData::new(images_data, [batch_size, 3, image_size, image_size]),
-            &self.device,
-        );
-        
-        let labels = Tensor::<MyBackend, 1, Int>::from_data(
             TensorData::new(labels_data, [batch_size]),
             &self.device,
         );
@@ -124,13 +99,6 @@ fn train_epoch(
     let mut current_model = model;
     
     let dataset_len = indices.len();
-    let expected_batches = (dataset_len + batch_size - 1) / batch_size;
-    
-    if num_batches == 0 {
-        println!("Dataset size: {}, Batch size: {}, Expected batches: {}", 
-                 dataset_len, batch_size, expected_batches);
-        println!("Loading first batch...");
-    }
     
     for batch_start in (0..dataset_len).step_by(batch_size) {
         let batch_end = (batch_start + batch_size).min(dataset_len);
@@ -145,34 +113,18 @@ fn train_epoch(
                 }
             }
             
-            if num_batches == 0 {
-                println!("First batch items loaded: {}", batch_items.len());
-            }
-            
             if batch_items.is_empty() {
                 continue;
             }
             
-            if num_batches == 0 {
-                println!("Creating tensors for first batch...");
-            }
             let (imgs, lbls) = batcher.batch(batch_items);
             let len = lbls.dims()[0];
-            if num_batches == 0 {
-                println!("Tensors created, batch size: {}", len);
-            }
             (imgs, lbls, len)
         }; // batch_itemsはここで解放
         
         // Forward pass, loss計算, backward passをスコープ内で実行
         let (loss_value, correct) = {
-            if num_batches == 0 {
-                println!("Running forward pass...");
-            }
             let logits = current_model.forward(images);
-            if num_batches == 0 {
-                println!("Forward pass complete.");
-            }
             
             let predictions = logits.clone().argmax(1).squeeze(1);
             let correct_count = predictions.equal(labels.clone()).int().sum().into_scalar().elem::<i32>();

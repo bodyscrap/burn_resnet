@@ -21,7 +21,3 @@ path = "src/finetune.rs"
 [[bin]]
 name = "convert_cifar10"
 path = "src/convert_cifar10.rs"
-
-[[bin]]
-name = "test_eval"
-path = "src/test_eval.rs"
