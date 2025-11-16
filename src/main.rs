@@ -40,6 +40,7 @@ impl Batcher {
             labels_data.push(item.label as i64);
         }
         
+        // 型を特に指定していない場合はfloat32として扱われる
         let images = Tensor::<MyAutodiffBackend, 4>::from_data(
             TensorData::new(images_data, [batch_size, 3, image_size, image_size]),
             &self.device,
